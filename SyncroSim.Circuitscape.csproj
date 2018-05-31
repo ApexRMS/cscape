@@ -79,9 +79,28 @@
   <ItemGroup>
     <Compile Include="Assembly.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RuntimeTransformer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="module.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\CoreForms\SyncroSim.Core.Forms.csproj">
+      <Project>{ea3a4b6e-d4db-466d-b510-6a38918f2dd8}</Project>
+      <Name>SyncroSim.Core.Forms</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Core\SyncroSim.Core.csproj">
+      <Project>{af51a2a0-349a-4a3c-bec2-906e605db6d7}</Project>
+      <Name>SyncroSim.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\StochasticTimeForms\SyncroSim.StochasticTime.Forms.csproj">
+      <Project>{577b7bdd-e5fa-41af-887a-e4a12b691ff8}</Project>
+      <Name>SyncroSim.StochasticTime.Forms</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\StochasticTime\SyncroSim.StochasticTime.csproj">
+      <Project>{ac26a679-5fb6-4cae-9b08-e0ea8027c628}</Project>
+      <Name>SyncroSim.StochasticTime</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
