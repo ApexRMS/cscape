@@ -1,48 +1,29 @@
 ﻿using System;
 using System.IO;
 using System.Data;
+using System.Diagnostics;
+using System.Globalization;
 using SyncroSim.Core;
 using SyncroSim.StochasticTime;
-using System.Globalization;
 
 namespace SyncroSim.Circuitscape
 {
-    class RuntimeTransformer : Transformer
+    class RuntimeTransformer : StochasticTimeTransformer
     {
-        public override void Transform()
+        private string m_ExeName;
+        private DataSheet m_InputFiles;
+        private string m_InputFolder;
+        private string m_OutputFolder;
+        
+        public override void Configure()
         {
-            try
-            {
-                this.SetStatusMessage("Running Circuitscape");
-                this.InternalTransform();
-            }
-            finally
-            {
-                this.SetStatusMessage(null);
-            }
-        }
+            base.Configure();
 
-        private void InternalTransform()
-        {
-            if (this.IsHeadlessInvocation())
-            {
-                string ExeName = this.GetCircuitscapeExeFile();
-                string IniName = this.CreateCircuitscapeIniFile();
-
-                this.InitRunControl();
-                base.ExternalTransform(ExeName, IniName, null, null);
-
-                this.CopyOutputFiles();
-                this.AppendOutputDataSheet();
-            }
-            else
+            if (this.IsUserInteractive())
             {
                 throw new InvalidOperationException("This model does not support interactive mode.");
             }
-        }
 
-        private void InitRunControl()
-        {
             DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_RunControl");
             DataTable dt = ds.GetData();
 
@@ -53,85 +34,91 @@ namespace SyncroSim.Circuitscape
             }
         }
 
-        private void CopyOutputFiles()
+        public override void Initialize()
         {
-            DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_Output");
-            string OutFolderName = this.Library.GetFolderName(LibraryFolderType.Output, ds, true);
-            string TempFolderName = this.Library.GetTempFolderName("Circuitscape");
+            base.Initialize();
 
-            foreach (string f in Directory.GetFiles(TempFolderName))
+            this.m_InputFiles = this.ResultScenario.GetDataSheet("Circuitscape_InputFile");
+            this.m_ExeName = this.GetExternalExecutableName("cs_run.exe", "Circuitscape");
+
+            if (this.m_ExeName == null)
             {
-                string t = Path.Combine(OutFolderName, Path.GetFileName(f));
-                File.Copy(f, t);
+                throw new InvalidOperationException("Cannot find the Circuitscape EXE file (cs_run.exe).");
+            }
+
+            if (this.m_InputFiles.GetData().DefaultView.Count == 0)
+            {
+                throw new InvalidOperationException("No input files specified.  Cannot continue.");
             }
         }
 
-        private void AppendOutputDataSheet()
+        protected override void OnTimestep(int iteration, int timestep)
         {
-            int Iteration = Convert.ToInt32(this.GetRunControlValue("MaximumIteration"));
-            int Timestep = Convert.ToInt32(this.GetRunControlValue("MaximumTimestep"));
-            DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_Output");
-            string OutFolderName = this.Library.GetFolderName(LibraryFolderType.Output, ds, true);
-            string OutASCIIName = Path.Combine(OutFolderName, "cc_cum_curmap.asc");
-            string OutTIFBaseName = string.Format(CultureInfo.InvariantCulture, "cc-{0}-{1}.tif", Iteration, Timestep);
-            string OutTIFFullName = Path.Combine(OutFolderName, OutTIFBaseName);
+            base.OnTimestep(iteration, timestep);
 
-            if (!Translate.GdalTranslate(OutASCIIName, OutTIFFullName, GdalOutputFormat.GTiff, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
+            this.m_InputFolder = this.Library.CreateTempFolder("Circuitscape\\In", true);
+            this.m_OutputFolder = this.Library.CreateTempFolder("Circuitscape\\Out", true);
+            string PolygonFile = this.PrepareInputFile(iteration, timestep, "PolygonFile");
+            string HabitatFile = this.PrepareInputFile(iteration, timestep, "HabitatFile");
+
+            if (PolygonFile != null && HabitatFile != null)
             {
-                throw new InvalidOperationException("Cannot translate from ASCII: " + OutASCIIName);
+                string IniName = this.CreateCircuitscapeIniFile(iteration, timestep, PolygonFile, HabitatFile);
+                base.ExternalTransform(this.m_ExeName, IniName, null, null);
+                this.CopyOutputFiles();
+                this.UpdateOutputDataSheet(iteration, timestep);                
             }
-
-            DataTable dt = ds.GetData();
-            dt.Rows.Add(new object[] { Iteration, Timestep, OutTIFBaseName });
         }
 
-        private bool IsHeadlessInvocation()
+        private string GetInputFile(int iteration, int timestep, string columnName)
         {
-            DataRow dr = this.GetEnvironmentRow("SSIM_USER_INTERACTIVE");
+            string q = string.Format(CultureInfo.InvariantCulture,"Iteration={0} AND Timestep={1}", iteration, timestep);
+            DataRow[] rows = this.m_InputFiles.GetData().Select(q);
+            Debug.Assert(rows.Length == 0 || rows.Length == 1);
 
-            if (dr == null)
+            if (rows.Length == 0)
             {
-                return true;
+                return null;
             }
             else
             {
-                return ((string)dr["Value"] != "True");
+                string f = (string)rows[0][columnName];
+                return Path.Combine(this.Library.GetFolderName(LibraryFolderType.Input, this.m_InputFiles, false), f);
             }
         }
 
-        private object GetRunControlValue(string columnName)
+        private string PrepareInputFile(int iteration, int timestep, string columnName)
         {
-            DataRow dr = this.ResultScenario.GetDataSheet("Circuitscape_RunControl").GetDataRow();
-            return dr[columnName];
-        }
+            string SourceFile = this.GetInputFile(iteration, timestep, columnName);
 
-        private object GetInputValue(string columnName)
-        {
-            DataRow dr = this.ResultScenario.GetDataSheet("Circuitscape_Input").GetDataRow();
-
-            if (dr == null || dr[columnName] == DBNull.Value)
+            if (SourceFile == null)
             {
-                throw new ArgumentException("The input data is missing for: " + columnName);
+                return null;
             }
 
-            return dr[columnName];
+            string TargetFileBase = Path.GetFileNameWithoutExtension(SourceFile) + ".asc";
+            string TargetFileFull = Path.Combine(this.m_InputFolder, TargetFileBase);
+            
+            if (Path.GetExtension(SourceFile).ToLower() == ".tif")
+            {             
+                if (!Translate.GdalTranslate(SourceFile, TargetFileFull, GdalOutputFormat.AAIGrid, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
+                {
+                    throw new InvalidOperationException("Cannot translate from raster format: " + SourceFile);
+                }
+            }
+            else
+            {
+                Debug.Assert(Path.GetExtension(SourceFile).ToLower() == ".asc");
+                File.Copy(SourceFile, TargetFileFull);
+            }
+
+            return TargetFileFull;
         }
 
-        private string GetInputFileName(string fileName)
+        private string CreateCircuitscapeIniFile(int iteration, int timestep, string polygonFile, string habitatFile)
         {
-            DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_Input");
-            string f = this.Library.GetFolderName(LibraryFolderType.Input, ds, false);
-
-            return (Path.Combine(f, fileName));
-        }
-
-        private string CreateCircuitscapeIniFile()
-        {
-            string PolygonFile = this.GetInputFileName((string) this.GetInputValue("PolygonFile"));
-            string HabitatFile = this.GetInputFileName((string)this.GetInputValue("HabitatFile"));
-            string TempFolderName = this.Library.GetTempFolderName("Circuitscape");
-            string IniFileName = Path.Combine(TempFolderName, "cc.ini");
-            string OutFileName = Path.Combine(TempFolderName, "cc.out");
+            string IniFileName = Path.Combine(this.m_InputFolder, "Circuitscape.ini");
+            string OutFileName = Path.Combine(this.m_OutputFolder, FormatFileName("Circuitscape", iteration, timestep, "out"));
 
             using (StreamWriter t = new StreamWriter(IniFileName))
             {
@@ -139,116 +126,47 @@ namespace SyncroSim.Circuitscape
                 t.WriteLine("data_type = raster");
                 t.WriteLine("scenario = pairwise");
                 t.WriteLine("write_cur_maps = TRUE");
-                t.WriteLine("point_file = {0}", PolygonFile);
-                t.WriteLine("polygon_file = {0}", PolygonFile);
-                t.WriteLine("habitat_file = {0}", HabitatFile);
-                t.WriteLine("output_file = {0}", OutFileName);                                                      
+                t.WriteLine("point_file = {0}", polygonFile);
+                t.WriteLine("polygon_file = {0}", polygonFile);
+                t.WriteLine("habitat_file = {0}", habitatFile);
+                t.WriteLine("output_file = {0}", OutFileName);
             }
 
             return IniFileName;
         }
 
-        private string GetCircuitscapeExeFile()
+        private void CopyOutputFiles()
         {
-            string f = this.GetExeNameFromConfig();
+            DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_OutputFile");
+            string OutFolderName = this.Library.GetFolderName(LibraryFolderType.Output, ds, true);
 
-            if (f == null)
+            foreach (string f in Directory.GetFiles(this.m_OutputFolder))
             {
-                f = this.GetDefaultExeName();
+                string t = Path.Combine(OutFolderName, Path.GetFileName(f));
+                File.Copy(f, t);
             }
-
-            if (f == null)
-            {
-                throw new InvalidOperationException("Cannot find the Circuitscape EXE file!");
-            }
-
-            if (!File.Exists(f))
-            {
-                string s = string.Format(CultureInfo.InvariantCulture, "The Circuitscape EXE file does not exist: {0}", f);
-                throw new InvalidOperationException(s);
-            }
-
-            return f;
         }
 
-        private string GetExeNameFromConfig()
+        private void UpdateOutputDataSheet(int iteration, int timestep)
         {
-            DataRow dr = this.GetEnvironmentRow("SSIM_WINDOWS_EXECUTABLE_LOCATION");
+            DataSheet ds = this.ResultScenario.GetDataSheet("Circuitscape_OutputFile");
+            string OutFolderName = this.Library.GetFolderName(LibraryFolderType.Output, ds, true);
+            string BaseName = string.Format(CultureInfo.InvariantCulture, "Circuitscape-It{0}-Ts{1}_cum_curmap", iteration, timestep);
+            string AsciiName = Path.Combine(OutFolderName, BaseName + ".asc");
+            string TifName = Path.Combine(OutFolderName, BaseName + ".tif");
 
-            if (dr == null)
+            if (!Translate.GdalTranslate(AsciiName, TifName, GdalOutputFormat.GTiff, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
             {
-                return null;
+                throw new InvalidOperationException("Cannot translate from ASCII: " + AsciiName);
             }
 
-            string v = (string)dr["Value"];
-            return v;
+            DataTable dt = ds.GetData();
+            dt.Rows.Add(new object[] { iteration, timestep, Path.GetFileName(TifName) });
         }
 
-        private string GetDefaultExeName()
+        private static string FormatFileName(string prefix, int iteration, int timestep, string extension)
         {
-            string f = this.GetDefaultCircuitscapeFolder();
-            return Path.Combine(f, "cs_run.exe");
-        }
-
-        private string GetDefaultCircuitscapeFolder()
-        {
-            string f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Circuitscape");
-
-            if (Directory.Exists(f))
-            {
-                return f;
-            }
-
-            f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Circuitscape");
-
-            if (Directory.Exists(f))
-            {
-                return f;
-            }
-
-            //We only ship x64 builds, but it is nice to have this work on an x86
-            //development machine, so:
-
-            f = Path.Combine("C:\\Program Files", "Circuitscape");
-
-            if (Directory.Exists(f))
-            {
-                return f;
-            }
-
-            f = Path.Combine("C:\\Program Files (x86)", "Circuitscape");
-
-            if (Directory.Exists(f))
-            {
-                return f;
-            }
-
-            return null;
-        }
-
-        private DataRow GetEnvironmentRow(string keyName)
-        {
-            DataSheet ds = this.Library.GetDataSheet("Circuitscape_Environment");
-
-            foreach (DataRow dr in ds.GetData().Rows)
-            {
-                if (dr.RowState == DataRowState.Deleted)
-                {
-                    continue;
-                }
-
-                if (dr["Name"] != DBNull.Value)
-                {
-                    string n = (string)dr["Name"];
-
-                    if (n == keyName)
-                    {
-                        return dr;
-                    }
-                }
-            }
-
-            return null;
+            return string.Format(CultureInfo.InvariantCulture, "{0}-It{1}-Ts{2}.{3}", prefix, iteration, timestep, extension);
         }
     }
 }
