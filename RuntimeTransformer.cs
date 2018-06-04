@@ -11,10 +11,12 @@ namespace SyncroSim.Circuitscape
     class RuntimeTransformer : StochasticTimeTransformer
     {
         private string m_ExeName;
-        private DataSheet m_InputFiles;
         private string m_InputFolder;
         private string m_OutputFolder;
-        
+        private DataSheet m_InputFiles;
+        private InputFileMap m_InputFileMap;
+        private const string BASE_EXE_NAME = "cs_run.exe";
+
         public override void Configure()
         {
             base.Configure();
@@ -37,18 +39,40 @@ namespace SyncroSim.Circuitscape
         public override void Initialize()
         {
             base.Initialize();
+            this.InitializeExe();
+            this.InitializeInputFiles();
+        }
 
-            this.m_InputFiles = this.ResultScenario.GetDataSheet("Circuitscape_InputFile");
-            this.m_ExeName = this.GetExternalExecutableName("cs_run.exe", "Circuitscape");
+        private void InitializeExe()
+        {
+            this.m_ExeName = BASE_EXE_NAME;
+            string SearchExe = this.GetExternalExecutableName("cs_run.exe", "Circuitscape");
 
-            if (this.m_ExeName == null)
+            if (SearchExe != null)
             {
-                throw new InvalidOperationException("Cannot find the Circuitscape EXE file (cs_run.exe).");
+                this.m_ExeName = SearchExe;
             }
+        }
 
-            if (this.m_InputFiles.GetData().DefaultView.Count == 0)
+        void InitializeInputFiles()
+        {
+            this.m_InputFileMap = new InputFileMap();
+            this.m_InputFiles = this.ResultScenario.GetDataSheet("Circuitscape_InputFile");
+            DataTable dt = this.m_InputFiles.GetData();
+
+            if (dt.DefaultView.Count == 0)
             {
                 throw new InvalidOperationException("No input files specified.  Cannot continue.");
+            }
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                Nullable<int> Iteration = GetNullableInt(dr, "Iteration") ;
+                Nullable<int> Timestep = GetNullableInt(dr, "Timestep");
+                string PolygonFile = (string)dr["PolygonFile"];
+                string HabitatFile = (string)dr["HabitatFile"];
+
+                this.m_InputFileMap.AddInputFileRecord(Iteration, Timestep, PolygonFile, HabitatFile);
             }
         }
 
@@ -58,38 +82,44 @@ namespace SyncroSim.Circuitscape
 
             this.m_InputFolder = this.Library.CreateTempFolder("Circuitscape\\In", true);
             this.m_OutputFolder = this.Library.CreateTempFolder("Circuitscape\\Out", true);
-            string PolygonFile = this.PrepareInputFile(iteration, timestep, "PolygonFile");
-            string HabitatFile = this.PrepareInputFile(iteration, timestep, "HabitatFile");
+            string PolygonFile = this.PrepareInputFile(iteration, timestep, true);
+            string HabitatFile = this.PrepareInputFile(iteration, timestep, false);
 
             if (PolygonFile != null && HabitatFile != null)
             {
                 string IniName = this.CreateCircuitscapeIniFile(iteration, timestep, PolygonFile, HabitatFile);
                 base.ExternalTransform(this.m_ExeName, IniName, null, null);
                 this.CopyOutputFiles();
-                this.UpdateOutputDataSheet(iteration, timestep);                
+                this.UpdateOutputDataSheet(iteration, timestep);
             }
         }
 
-        private string GetInputFile(int iteration, int timestep, string columnName)
+        private string GetInputFile(int iteration, int timestep, bool polygonFile)
         {
-            string q = string.Format(CultureInfo.InvariantCulture,"Iteration={0} AND Timestep={1}", iteration, timestep);
-            DataRow[] rows = this.m_InputFiles.GetData().Select(q);
-            Debug.Assert(rows.Length == 0 || rows.Length == 1);
+            InputFileRecord r = this.m_InputFileMap.GetInputFileRecord(iteration, timestep);
 
-            if (rows.Length == 0)
+            if (r == null)
             {
                 return null;
             }
             else
             {
-                string f = (string)rows[0][columnName];
-                return Path.Combine(this.Library.GetFolderName(LibraryFolderType.Input, this.m_InputFiles, false), f);
+                string folder = this.Library.GetFolderName(LibraryFolderType.Input, this.m_InputFiles, false);
+
+                if (polygonFile)
+                {
+                    return Path.Combine(folder, r.PolygonFile);
+                }
+                else
+                {
+                    return Path.Combine(folder, r.HabitatFile);
+                }
             }
         }
 
-        private string PrepareInputFile(int iteration, int timestep, string columnName)
+        private string PrepareInputFile(int iteration, int timestep, bool polygonFile)
         {
-            string SourceFile = this.GetInputFile(iteration, timestep, columnName);
+            string SourceFile = this.GetInputFile(iteration, timestep, polygonFile);
 
             if (SourceFile == null)
             {
@@ -98,9 +128,9 @@ namespace SyncroSim.Circuitscape
 
             string TargetFileBase = Path.GetFileNameWithoutExtension(SourceFile) + ".asc";
             string TargetFileFull = Path.Combine(this.m_InputFolder, TargetFileBase);
-            
+
             if (Path.GetExtension(SourceFile).ToLower() == ".tif")
-            {             
+            {
                 if (!Translate.GdalTranslate(SourceFile, TargetFileFull, GdalOutputFormat.AAIGrid, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
                 {
                     throw new InvalidOperationException("Cannot translate from raster format: " + SourceFile);
@@ -167,6 +197,20 @@ namespace SyncroSim.Circuitscape
         private static string FormatFileName(string prefix, int iteration, int timestep, string extension)
         {
             return string.Format(CultureInfo.InvariantCulture, "{0}-It{1}-Ts{2}.{3}", prefix, iteration, timestep, extension);
+        }
+
+        private int? GetNullableInt(DataRow dr, string columnName)
+        {
+            object value = dr[columnName];
+
+            if (object.ReferenceEquals(value, DBNull.Value) || object.ReferenceEquals(value, null))
+            {
+                return null;
+            }
+            else
+            {
+                return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+            }
         }
     }
 }
