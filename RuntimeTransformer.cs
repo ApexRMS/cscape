@@ -46,7 +46,7 @@ namespace SyncroSim.Circuitscape
         private void InitializeExe()
         {
             this.m_ExeName = BASE_EXE_NAME;
-            string SearchExe = this.GetExternalExecutableName("cs_run.exe", "Circuitscape");
+            string SearchExe = this.GetExternalExecutableName(BASE_EXE_NAME, "Circuitscape");
 
             if (SearchExe != null)
             {
