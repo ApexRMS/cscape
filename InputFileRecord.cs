@@ -18,10 +18,6 @@ namespace SyncroSim.Circuitscape
             {
                 return m_HabitatFile;
             }
-            set
-            {
-                m_HabitatFile = value;
-            }
         }
 
         public string PolygonFile
@@ -29,10 +25,6 @@ namespace SyncroSim.Circuitscape
             get
             {
                 return m_PolygonFile;
-            }
-            set
-            {
-                m_PolygonFile = value;
             }
         }
     }

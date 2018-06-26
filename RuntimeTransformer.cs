@@ -129,7 +129,7 @@ namespace SyncroSim.Circuitscape
             string TargetFileBase = Path.GetFileNameWithoutExtension(SourceFile) + ".asc";
             string TargetFileFull = Path.Combine(this.m_InputFolder, TargetFileBase);
 
-            if (Path.GetExtension(SourceFile).ToLower() == ".tif")
+            if (Path.GetExtension(SourceFile).ToUpperInvariant() == ".TIF")
             {
                 if (!Translate.GdalTranslate(SourceFile, TargetFileFull, GdalOutputFormat.AAIGrid, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
                 {
@@ -138,7 +138,7 @@ namespace SyncroSim.Circuitscape
             }
             else
             {
-                Debug.Assert(Path.GetExtension(SourceFile).ToLower() == ".asc");
+                Debug.Assert(Path.GetExtension(SourceFile).ToUpperInvariant() == ".ASC");
                 File.Copy(SourceFile, TargetFileFull);
             }
 
@@ -199,7 +199,7 @@ namespace SyncroSim.Circuitscape
             return string.Format(CultureInfo.InvariantCulture, "{0}-It{1}-Ts{2}.{3}", prefix, iteration, timestep, extension);
         }
 
-        private int? GetNullableInt(DataRow dr, string columnName)
+        private static int? GetNullableInt(DataRow dr, string columnName)
         {
             object value = dr[columnName];
 
