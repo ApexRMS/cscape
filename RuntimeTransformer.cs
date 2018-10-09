@@ -88,7 +88,7 @@ namespace SyncroSim.Circuitscape
             if (PolygonFile != null && HabitatFile != null)
             {
                 string IniName = this.CreateCircuitscapeIniFile(iteration, timestep, PolygonFile, HabitatFile);
-                base.ExternalTransform(this.m_ExeName, IniName, null, null);
+                base.ExternalTransform(this.m_ExeName, IniName, null, false, null);
                 this.CopyOutputFiles();
                 this.UpdateOutputDataSheet(iteration, timestep);
             }
