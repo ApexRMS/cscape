@@ -131,10 +131,7 @@ namespace SyncroSim.Circuitscape
 
             if (Path.GetExtension(SourceFile).ToUpperInvariant() == ".TIF")
             {
-                if (!Translate.GdalTranslate(SourceFile, TargetFileFull, GdalOutputFormat.AAIGrid, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
-                {
-                    throw new InvalidOperationException("Cannot translate from raster format: " + SourceFile);
-                }
+                Spatial.ConvertToAAIGridFormat(SourceFile, TargetFileFull);
             }
             else
             {
@@ -185,10 +182,7 @@ namespace SyncroSim.Circuitscape
             string AsciiName = Path.Combine(OutFolderName, BaseName + ".asc");
             string TifName = Path.Combine(OutFolderName, BaseName + ".tif");
 
-            if (!Translate.GdalTranslate(AsciiName, TifName, GdalOutputFormat.GTiff, GdalOutputType.Float64, GeoTiffCompressionType.None, null))
-            {
-                throw new InvalidOperationException("Cannot translate from ASCII: " + AsciiName);
-            }
+            Spatial.ConvertFromAAIGridFormat(AsciiName, TifName, GeoTiffCompressionType.DEFLATE);
 
             DataTable dt = ds.GetData();
             dt.Rows.Add(new object[] { iteration, timestep, Path.GetFileName(TifName) });
