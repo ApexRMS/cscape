@@ -68,6 +68,26 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="SyncroSim.Common">
+      <HintPath>..\..\ssimbin\SyncroSim.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SyncroSim.Core">
+      <HintPath>..\..\ssimbin\SyncroSim.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SyncroSim.Core.Forms">
+      <HintPath>..\..\ssimbin\SyncroSim.Core.Forms.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SyncroSim.StochasticTime">
+      <HintPath>..\..\ssimbin\SyncroSim.StochasticTime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SyncroSim.StochasticTime.Forms">
+      <HintPath>..\..\ssimbin\SyncroSim.StochasticTime.Forms.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -85,29 +105,7 @@
     <Compile Include="RuntimeTransformer.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="module.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\Common\SyncroSim.Common.csproj">
-      <Project>{1376529f-fc5a-43e8-8554-8341b4fe2496}</Project>
-      <Name>SyncroSim.Common</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\CoreForms\SyncroSim.Core.Forms.csproj">
-      <Project>{ea3a4b6e-d4db-466d-b510-6a38918f2dd8}</Project>
-      <Name>SyncroSim.Core.Forms</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\Core\SyncroSim.Core.csproj">
-      <Project>{af51a2a0-349a-4a3c-bec2-906e605db6d7}</Project>
-      <Name>SyncroSim.Core</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\StochasticTimeForms\SyncroSim.StochasticTime.Forms.csproj">
-      <Project>{577b7bdd-e5fa-41af-887a-e4a12b691ff8}</Project>
-      <Name>SyncroSim.StochasticTime.Forms</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\StochasticTime\SyncroSim.StochasticTime.csproj">
-      <Project>{ac26a679-5fb6-4cae-9b08-e0ea8027c628}</Project>
-      <Name>SyncroSim.StochasticTime</Name>
-    </ProjectReference>
+    <None Include="package.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
