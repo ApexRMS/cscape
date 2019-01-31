@@ -1,4 +1,6 @@
-﻿
+﻿//cscape: A SyncroSim Package for running Circuitscape simulations.
+//Copyright © 2007-2019 Apex Resource Management Solution Ltd. (ApexRMS). All rights reserved.
+
 using System;
 using SyncroSim.Common;
 using System.Globalization;
